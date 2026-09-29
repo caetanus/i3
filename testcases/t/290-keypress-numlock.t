@@ -47,6 +47,14 @@ bindsym Mod1+Shift+q nop Mod1+Shift+q
 
 # Binding which should work with numlock and without, see issue #2559.
 bindcode 39 nop s
+
+# Digit bindings should also trigger on the keypad digit (with numlock).
+bindsym Mod4+2 nop 2
+bindsym Mod4+Shift+2 nop Shift+2
+
+# An explicit keypad binding takes precedence over the digit binding.
+bindsym Mod4+3 nop 3
+bindsym Mod4+Mod2+KP_3 nop KP_3
 EOT
 
 my $pid = launch_with_config($config);
@@ -186,6 +194,56 @@ is(listen_for_binding(
     ),
    'Mod1+Shift+q',
    'triggered the "Mod1+Shift+q" keybinding');
+
+is(listen_for_binding(
+    sub {
+        xtest_key_press(77); # enable Num_Lock
+        xtest_key_release(77); # enable Num_Lock
+        xtest_key_press(133); # Super_L
+        xtest_key_press(88); # KP_2
+        xtest_key_release(88); # KP_2
+        xtest_key_release(133); # Super_L
+        xtest_key_press(77); # disable Num_Lock
+        xtest_key_release(77); # disable Num_Lock
+        xtest_sync_with_i3;
+    },
+    ),
+   '2',
+   'triggered the "Mod4+2" keybinding with KP_2');
+
+is(listen_for_binding(
+    sub {
+        xtest_key_press(77); # enable Num_Lock
+        xtest_key_release(77); # enable Num_Lock
+        xtest_key_press(133); # Super_L
+        xtest_key_press(50); # Shift_L
+        xtest_key_press(88); # KP_2
+        xtest_key_release(88); # KP_2
+        xtest_key_release(50); # Shift_L
+        xtest_key_release(133); # Super_L
+        xtest_key_press(77); # disable Num_Lock
+        xtest_key_release(77); # disable Num_Lock
+        xtest_sync_with_i3;
+    },
+    ),
+   'Shift+2',
+   'triggered the "Mod4+Shift+2" keybinding with KP_2');
+
+is(listen_for_binding(
+    sub {
+        xtest_key_press(77); # enable Num_Lock
+        xtest_key_release(77); # enable Num_Lock
+        xtest_key_press(133); # Super_L
+        xtest_key_press(89); # KP_3
+        xtest_key_release(89); # KP_3
+        xtest_key_release(133); # Super_L
+        xtest_key_press(77); # disable Num_Lock
+        xtest_key_release(77); # disable Num_Lock
+        xtest_sync_with_i3;
+    },
+    ),
+   'KP_3',
+   'explicit "Mod4+Mod2+KP_3" keybinding takes precedence');
 
 is(listen_for_binding(
     sub {

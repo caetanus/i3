@@ -362,6 +362,10 @@ struct resolve {
 
     /* Like |xkb_state|, but with NumLock, just without the shift modifier, if shift was specified. */
     struct xkb_state *xkb_state_numlock_no_shift;
+
+    /* The keypad keysym which should also trigger the binding (e.g.
+     * XKB_KEY_KP_1 for XKB_KEY_1), or XKB_KEY_NoSymbol. */
+    xkb_keysym_t keypad_keysym;
 };
 
 #define ADD_TRANSLATED_KEY(code, mods)                                                     \
@@ -371,6 +375,58 @@ struct resolve {
         binding_keycode->keycode = (code);                                                 \
         TAILQ_INSERT_TAIL(&(bind->keycodes_head), binding_keycode, keycodes);              \
     } while (0)
+
+/*
+ * Returns the keypad keysym equivalent to the digit keysym |keysym| (e.g.
+ * XKB_KEY_KP_1 for XKB_KEY_1), or XKB_KEY_NoSymbol if |keysym| is no digit.
+ *
+ */
+static xkb_keysym_t keypad_equivalent(xkb_keysym_t keysym) {
+    if (keysym >= XKB_KEY_0 && keysym <= XKB_KEY_9)
+        return XKB_KEY_KP_0 + (keysym - XKB_KEY_0);
+    return XKB_KEY_NoSymbol;
+}
+
+/*
+ * Returns true if some other keysym binding explicitly binds |keysym| with the
+ * same modifiers as |bind|, in which case that binding should take precedence.
+ *
+ */
+static bool keysym_explicitly_bound(Binding *bind, xkb_keysym_t keysym) {
+    Binding *check;
+    TAILQ_FOREACH (check, bindings, bindings) {
+        if (check == bind || check->symbol == NULL)
+            continue;
+        if ((check->event_state_mask & ~xcb_numlock_mask) != (bind->event_state_mask & ~xcb_numlock_mask) ||
+            check->release != bind->release)
+            continue;
+        if (xkb_keysym_from_name(check->symbol, XKB_KEYSYM_NO_FLAGS) == keysym)
+            return true;
+    }
+    return false;
+}
+
+/*
+ * Binds |key| to |resolving->bind| if, with NumLock active, it produces the
+ * keypad equivalent of the bound digit, so that e.g. “bindsym $mod+1” also
+ * triggers on KP_1.
+ *
+ */
+static bool add_keypad_keycode_if_matches(const struct resolve *resolving, xkb_keycode_t key) {
+    Binding *bind = resolving->bind;
+    if (resolving->keypad_keysym == XKB_KEY_NoSymbol)
+        return false;
+
+    xkb_keysym_t sym = xkb_state_key_get_one_sym(resolving->xkb_state_numlock, key);
+    if (sym != resolving->keypad_keysym && (bind->event_state_mask & XCB_KEY_BUT_MASK_SHIFT))
+        sym = xkb_state_key_get_one_sym(resolving->xkb_state_numlock_no_shift, key);
+    if (sym != resolving->keypad_keysym)
+        return false;
+
+    ADD_TRANSLATED_KEY(key, bind->event_state_mask | xcb_numlock_mask);
+    ADD_TRANSLATED_KEY(key, bind->event_state_mask | xcb_numlock_mask | XCB_MOD_MASK_LOCK);
+    return true;
+}
 
 /*
  * add_keycode_if_matches is called for each keycode in the keymap and will add
@@ -383,6 +439,9 @@ static void add_keycode_if_matches(struct xkb_keymap *keymap, xkb_keycode_t key,
     struct xkb_state *numlock_state = resolving->xkb_state_numlock;
     xkb_keysym_t sym = xkb_state_key_get_one_sym(resolving->xkb_state, key);
     if (sym != resolving->keysym) {
+        if (add_keypad_keycode_if_matches(resolving, key))
+            return;
+
         /* Check if Shift was specified, and try resolving the symbol without
          * shift, so that “bindsym $mod+Shift+a nop” actually works. */
         const xkb_layout_index_t layout = xkb_state_key_get_layout(resolving->xkb_state, key);
@@ -563,7 +622,11 @@ void translate_keysyms(void) {
             .xkb_state_no_shift = dummy_state_no_shift,
             .xkb_state_numlock = dummy_state_numlock,
             .xkb_state_numlock_no_shift = dummy_state_numlock_no_shift,
+            .keypad_keysym = XKB_KEY_NoSymbol,
         };
+        const xkb_keysym_t keypad_keysym = keypad_equivalent(keysym);
+        if (keypad_keysym != XKB_KEY_NoSymbol && !keysym_explicitly_bound(bind, keypad_keysym))
+            resolving.keypad_keysym = keypad_keysym;
         while (!TAILQ_EMPTY(&(bind->keycodes_head))) {
             struct Binding_Keycode *first = TAILQ_FIRST(&(bind->keycodes_head));
             TAILQ_REMOVE(&(bind->keycodes_head), first, keycodes);
