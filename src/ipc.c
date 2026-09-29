@@ -528,6 +528,17 @@ void dump_node(yajl_gen gen, struct Con *con, bool inplace_restart) {
         y(integer, con->num);
 
         dump_gaps(gen, "gaps", con->gaps);
+
+        ystr("super_workspace");
+        y(integer, con->super_workspace);
+
+        if (con->ss_output != NULL) {
+            ystr("ss_output");
+            ystr(con->ss_output);
+
+            ystr("ss_visible");
+            y(bool, con->ss_visible);
+        }
     }
 
     ystr("window");
@@ -695,6 +706,11 @@ void dump_node(yajl_gen gen, struct Con *con, bool inplace_restart) {
     if (inplace_restart && con->window != NULL) {
         ystr("depth");
         y(integer, con->depth);
+    }
+
+    if (inplace_restart && con->type == CT_ROOT) {
+        ystr("current_super_workspace");
+        y(integer, current_super_workspace);
     }
 
     if (inplace_restart && con->type == CT_ROOT && previous_workspace_name) {
@@ -1398,9 +1414,28 @@ IPC_HANDLER(get_binding_state) {
     y(free);
 }
 
+/*
+ * Returns the super workspaces.
+ *
+ */
+IPC_HANDLER(get_super_workspaces) {
+    yajl_gen gen = ygenalloc();
+
+    y(map_open);
+    dump_super_workspaces(gen);
+    y(map_close);
+
+    const unsigned char *payload;
+    ylength length;
+    y(get_buf, &payload, &length);
+
+    ipc_send_client_message(client, length, I3_IPC_REPLY_TYPE_SUPER_WORKSPACES, payload);
+    y(free);
+}
+
 /* The index of each callback function corresponds to the numeric
  * value of the message type (see include/i3/ipc.h) */
-handler_t handlers[13] = {
+handler_t handlers[14] = {
     handle_run_command,
     handle_get_workspaces,
     handle_subscribe,
@@ -1414,6 +1449,7 @@ handler_t handlers[13] = {
     handle_send_tick,
     handle_sync,
     handle_get_binding_state,
+    handle_get_super_workspaces,
 };
 
 /*

@@ -135,6 +135,24 @@ void cmd_unmark(I3_CMD, const char *mark);
 void cmd_mode(I3_CMD, const char *mode);
 
 /**
+ * Implementation of 'super_workspace [number] <name>'.
+ *
+ */
+void cmd_super_workspace(I3_CMD, const char *name);
+
+/**
+ * Implementation of 'super_workspace back_and_forth'.
+ *
+ */
+void cmd_super_workspace_back_and_forth(I3_CMD);
+
+/**
+ * Implementation of 'super_workspace notifications current|all|toggle'.
+ *
+ */
+void cmd_super_workspace_notifications(I3_CMD, const char *scope);
+
+/**
  * Implementation of 'move [window|container] [to] output <str>'.
  *
  */

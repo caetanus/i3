@@ -415,6 +415,7 @@ i3srcs = [
   'src/version.c',
   'src/window.c',
   'src/workspace.c',
+  'src/super_workspace.c',
   'src/x.c',
   'src/xcb.c',
   'src/xcursor.c',

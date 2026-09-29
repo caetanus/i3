@@ -34,6 +34,7 @@ state INITIAL:
   'floating_modifier'                      -> FLOATING_MODIFIER
   'default_orientation'                    -> DEFAULT_ORIENTATION
   'workspace_layout'                       -> WORKSPACE_LAYOUT
+  'super_workspace'                        -> SUPER_WORKSPACE
   windowtype = 'default_border', 'new_window', 'default_floating_border', 'new_float'
       -> DEFAULT_BORDER
   'hide_edge_borders'                      -> HIDE_EDGE_BORDERS
@@ -99,6 +100,21 @@ state SMART_GAPS:
 state AUTOTILING:
   enabled = '1', 'yes', 'true', 'on', 'enable', 'active', '0', 'no', 'false', 'off', 'disable', 'inactive'
       -> call cfg_autotiling($enabled)
+
+# super_workspace <name> [user <user>]
+state SUPER_WORKSPACE:
+  super_workspace = word
+      -> SUPER_WORKSPACE_USER
+
+state SUPER_WORKSPACE_USER:
+  end
+      -> call cfg_super_workspace($super_workspace, NULL)
+  'user'
+      -> SUPER_WORKSPACE_USER_NAME
+
+state SUPER_WORKSPACE_USER_NAME:
+  user = word
+      -> call cfg_super_workspace($super_workspace, $user)
 
 # include <pattern>
 state INCLUDE:

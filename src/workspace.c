@@ -30,7 +30,7 @@ static char **binding_workspace_names = NULL;
 Con *get_existing_workspace_by_name(const char *name) {
     Con *output, *workspace = NULL;
     TAILQ_FOREACH (output, &(croot->nodes_head), nodes) {
-        GREP_FIRST(workspace, output_get_content(output), !strcasecmp(child->name, name));
+        GREP_FIRST(workspace, output_get_content(output), child->ss_output == NULL && !strcasecmp(child->name, name));
     }
 
     return workspace;
@@ -44,7 +44,7 @@ Con *get_existing_workspace_by_name(const char *name) {
 Con *get_existing_workspace_by_num(int num) {
     Con *output, *workspace = NULL;
     TAILQ_FOREACH (output, &(croot->nodes_head), nodes) {
-        GREP_FIRST(workspace, output_get_content(output), child->num == num);
+        GREP_FIRST(workspace, output_get_content(output), child->ss_output == NULL && child->num == num);
     }
 
     return workspace;
@@ -170,6 +170,7 @@ Con *workspace_get(const char *num) {
     workspace->name = sstrdup(num);
     workspace->workspace_layout = config.default_layout;
     workspace->num = parsed_num;
+    workspace->super_workspace = current_super_workspace;
     workspace->type = CT_WORKSPACE;
     workspace->gaps = gaps;
 
@@ -257,6 +258,7 @@ Con *create_workspace_on_output(Output *output, Con *content) {
     bool exists = true;
     Con *ws = con_new(NULL, NULL);
     ws->type = CT_WORKSPACE;
+    ws->super_workspace = current_super_workspace;
 
     /* try the configured workspace bindings first to find a free name */
     for (int n = 0; binding_workspace_names[n] != NULL; n++) {
@@ -872,8 +874,11 @@ void workspace_update_urgent_flag(Con *ws) {
     ws->urgent = get_urgency_flag(ws);
     DLOG("Workspace urgency flag changed from %d to %d\n", old_flag, ws->urgent);
 
-    if (old_flag != ws->urgent)
+    if (old_flag != ws->urgent) {
         ipc_send_workspace_event("urgent", ws, NULL);
+        if (ws->ss_output != NULL)
+            ipc_send_super_workspace_event("urgent", -1);
+    }
 }
 
 /*

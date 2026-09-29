@@ -80,6 +80,14 @@ static void free_configuration(void) {
         FREE(assign);
     }
 
+    while (!TAILQ_EMPTY(&super_workspace_assignments)) {
+        struct Super_Workspace_Assignment *assign = TAILQ_FIRST(&super_workspace_assignments);
+        FREE(assign->name);
+        FREE(assign->user);
+        TAILQ_REMOVE(&super_workspace_assignments, assign, super_workspace_assignments);
+        FREE(assign);
+    }
+
     /* Clear bar configs */
     Barconfig *barconfig;
     while (!TAILQ_EMPTY(&barconfigs)) {

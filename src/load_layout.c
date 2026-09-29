@@ -437,6 +437,9 @@ static int json_string(void *ctx, const unsigned char *val, size_t len) {
             else if (strcasecmp(buf, "changed") == 0)
                 json_node->scratchpad_state = SCRATCHPAD_CHANGED;
             free(buf);
+        } else if (strcasecmp(last_key, "ss_output") == 0) {
+            FREE(json_node->ss_output);
+            json_node->ss_output = sstrndup((const char *)val, len);
         } else if (strcasecmp(last_key, "previous_workspace_name") == 0) {
             FREE(previous_workspace_name);
             previous_workspace_name = sstrndup((const char *)val, len);
@@ -456,6 +459,12 @@ static int json_int(void *ctx, long long val) {
 
     if (strcasecmp(last_key, "num") == 0)
         json_node->num = val;
+
+    if (strcasecmp(last_key, "super_workspace") == 0)
+        json_node->super_workspace = val;
+
+    if (strcasecmp(last_key, "current_super_workspace") == 0)
+        current_super_workspace = val;
 
     if (strcasecmp(last_key, "current_border_width") == 0)
         json_node->current_border_width = val;
@@ -535,6 +544,9 @@ static int json_bool(void *ctx, int val) {
 
     if (strcasecmp(last_key, "sticky") == 0)
         json_node->sticky = val;
+
+    if (strcasecmp(last_key, "ss_visible") == 0)
+        json_node->ss_visible = val;
 
     if (parsing_swallows) {
         if (strcasecmp(last_key, "restart_mode") == 0) {

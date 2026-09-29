@@ -99,6 +99,7 @@ struct assignments_head assignments = TAILQ_HEAD_INITIALIZER(assignments);
 /* The list of workspace assignments (which workspace should end up on which
  * output) */
 struct ws_assignments_head ws_assignments = TAILQ_HEAD_INITIALIZER(ws_assignments);
+struct super_workspace_assignments_head super_workspace_assignments = TAILQ_HEAD_INITIALIZER(super_workspace_assignments);
 
 /* We hope that those are supported and set them to true */
 bool xkb_supported = true;

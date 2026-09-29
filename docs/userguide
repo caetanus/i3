@@ -710,6 +710,42 @@ default_orientation horizontal|vertical|auto
 default_orientation vertical
 ----------------------------
 
+[[_super_workspaces]]
+=== Super workspaces
+
+A super workspace is an independent set of workspaces. Only one super workspace
+is active at a time: switching to another one hides all workspaces of the active
+one (their windows keep running, like in the scratchpad) and brings back the
+workspaces of the target, each on the output it was on. Every super workspace
+has its own workspaces 1, 2, … so that +workspace number 1+ always refers to
+workspace 1 of the active super workspace. Super workspace 0 is active on
+startup.
+
+Super workspaces are identified by the number their name starts with, like
+workspaces. With the +super_workspace+ configuration directive, you can give a
+super workspace a name (e.g. with an icon) and associate a user with it. i3
+does not use the user itself; it is reported via IPC (+GET_SUPER_WORKSPACES+)
+so that launchers can run programs as that user.
+
+*Syntax*:
+------------------------------------------
+super_workspace <name> [user <user>]
+------------------------------------------
+
+*Examples*:
+------------------------------------------------------
+set $ss0 "0:"
+set $ss1 "1:acme"
+
+super_workspace $ss0
+super_workspace $ss1 user acme
+
+bindsym Control+Mod4+0 super_workspace number $ss0
+bindsym Control+Mod4+1 super_workspace number $ss1
+------------------------------------------------------
+
+See <<_switching_super_workspaces>> for the commands.
+
 === Automatic tiling
 
 With +autotiling+ enabled, i3 splits the focused window along its longer side
@@ -2595,6 +2631,32 @@ workspace and ignore the text part. So even when the workspace has been renamed
 "1: web", the above command will still switch to it.  The command +workspace 1+
 will however create and move to a new workspace "1" alongside the existing
 "1: mail" workspace.
+
+[[_switching_super_workspaces]]
+=== Switching super workspaces
+
+To switch to another super workspace (see <<_super_workspaces>>), use the
++super_workspace+ command. Only the leading number of the name is significant;
++number+ is optional and accepted for symmetry with +workspace number+.
++back_and_forth+ switches to the previously active super workspace.
+
++super_workspace notifications+ sets whether notifications of all super
+workspaces or only of the active one should be shown. i3 only stores this
+setting and reports it via IPC; it is up to the status bar to implement it.
+
+*Syntax*:
+----------------------------------------------------
+super_workspace [number] <name>
+super_workspace back_and_forth
+super_workspace notifications current|all|toggle
+----------------------------------------------------
+
+*Examples*:
+-----------------------------------------------------------------
+bindsym Control+Mod4+1 super_workspace number $ss1
+bindsym Control+Mod4+Tab super_workspace back_and_forth
+bindsym Control+Mod4+n super_workspace notifications toggle
+-----------------------------------------------------------------
 
 === Moving workspaces to a different screen
 

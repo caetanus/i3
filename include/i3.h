@@ -62,6 +62,7 @@ extern const char *current_binding_mode;
 extern TAILQ_HEAD(autostarts_head, Autostart) autostarts;
 extern TAILQ_HEAD(autostarts_always_head, Autostart) autostarts_always;
 extern TAILQ_HEAD(ws_assignments_head, Workspace_Assignment) ws_assignments;
+extern TAILQ_HEAD(super_workspace_assignments_head, Super_Workspace_Assignment) super_workspace_assignments;
 extern TAILQ_HEAD(assignments_head, Assignment) assignments;
 extern SLIST_HEAD(stack_wins_head, Stack_Window) stack_wins;
 

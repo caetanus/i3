@@ -78,6 +78,7 @@ Con *con_new(Con *parent, i3Window *window) {
  */
 void con_free(Con *con) {
     free(con->name);
+    FREE(con->ss_output);
     FREE(con->deco_render_params);
     TAILQ_REMOVE(&all_cons, con, all_cons);
     while (!TAILQ_EMPTY(&(con->swallow_head))) {
@@ -586,7 +587,8 @@ Con *con_get_fullscreen_covering_ws(Con *ws) {
  *
  */
 bool con_is_internal(Con *con) {
-    return (con->name[0] == '_' && con->name[1] == '_');
+    return (con->name[0] == '_' && con->name[1] == '_') ||
+           (con->type == CT_WORKSPACE && con->ss_output != NULL);
 }
 
 /*

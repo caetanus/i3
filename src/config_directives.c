@@ -389,6 +389,29 @@ CFGFUN(autotiling, const char *enable) {
     config.autotiling = boolstr(enable);
 }
 
+CFGFUN(super_workspace, const char *name, const char *user) {
+    const int num = ws_name_to_number(name);
+    if (num == -1) {
+        ELOG("super_workspace \"%s\" does not start with a number, ignoring\n", name);
+        return;
+    }
+
+    struct Super_Workspace_Assignment *assignment;
+    TAILQ_FOREACH (assignment, &super_workspace_assignments, super_workspace_assignments) {
+        if (assignment->num == num) {
+            ELOG("Super workspace %d is already configured as \"%s\", ignoring \"%s\"\n",
+                 num, assignment->name, name);
+            return;
+        }
+    }
+
+    assignment = scalloc(1, sizeof(struct Super_Workspace_Assignment));
+    assignment->name = sstrdup(name);
+    assignment->num = num;
+    assignment->user = (user != NULL ? sstrdup(user) : NULL);
+    TAILQ_INSERT_TAIL(&super_workspace_assignments, assignment, super_workspace_assignments);
+}
+
 CFGFUN(floating_minimum_size, const long width, const long height) {
     config.floating_minimum_width = width;
     config.floating_minimum_height = height;

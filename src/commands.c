@@ -1025,6 +1025,55 @@ void cmd_mode(I3_CMD, const char *mode) {
     ysuccess(true);
 }
 
+/*
+ * Implementation of 'super_workspace [number] <name>'.
+ *
+ */
+void cmd_super_workspace(I3_CMD, const char *name) {
+    if (con_get_fullscreen_con(croot, CF_GLOBAL)) {
+        yerror("Cannot switch super workspace while in global fullscreen");
+        return;
+    }
+
+    if (!super_workspace_switch_by_name(name)) {
+        yerror("Could not parse number \"%s\"", name);
+        return;
+    }
+
+    cmd_output->needs_tree_render = true;
+    ysuccess(true);
+}
+
+/*
+ * Implementation of 'super_workspace back_and_forth'.
+ *
+ */
+void cmd_super_workspace_back_and_forth(I3_CMD) {
+    if (con_get_fullscreen_con(croot, CF_GLOBAL)) {
+        yerror("Cannot switch super workspace while in global fullscreen");
+        return;
+    }
+
+    super_workspace_back_and_forth();
+
+    cmd_output->needs_tree_render = true;
+    ysuccess(true);
+}
+
+/*
+ * Implementation of 'super_workspace notifications current|all|toggle'.
+ *
+ */
+void cmd_super_workspace_notifications(I3_CMD, const char *scope) {
+    if (strcmp(scope, "toggle") == 0)
+        super_workspace_notifications_all = !super_workspace_notifications_all;
+    else
+        super_workspace_notifications_all = (strcmp(scope, "all") == 0);
+
+    ipc_send_super_workspace_event("notifications", -1);
+    ysuccess(true);
+}
+
 typedef struct user_output_name {
     char *name;
     TAILQ_ENTRY(user_output_name) user_output_names;

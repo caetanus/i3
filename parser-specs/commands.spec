@@ -42,6 +42,7 @@ state INITIAL:
   'title_format' -> TITLE_FORMAT
   'title_window_icon' -> TITLE_WINDOW_ICON
   'mode' -> MODE
+  'super_workspace' -> SUPER_WORKSPACE
   'bar' -> BAR
   'gaps' -> GAPS
 
@@ -453,6 +454,27 @@ state MOVE_TO_POSITION_Y:
 state MODE:
   mode = string
       -> call cmd_mode($mode)
+
+# super_workspace [number] <name>
+# super_workspace back_and_forth
+# super_workspace notifications current|all|toggle
+state SUPER_WORKSPACE:
+  'back_and_forth'
+      -> call cmd_super_workspace_back_and_forth()
+  'notifications'
+      -> SUPER_WORKSPACE_NOTIFICATIONS
+  'number'
+      -> SUPER_WORKSPACE_NUMBER
+  name = string
+      -> call cmd_super_workspace($name)
+
+state SUPER_WORKSPACE_NUMBER:
+  name = string
+      -> call cmd_super_workspace($name)
+
+state SUPER_WORKSPACE_NOTIFICATIONS:
+  scope = 'current', 'all', 'toggle'
+      -> call cmd_super_workspace_notifications($scope)
 
 state NOP:
   comment = string

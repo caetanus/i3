@@ -41,6 +41,7 @@
 #include "xcb.h"
 #include "manage.h"
 #include "workspace.h"
+#include "super_workspace.h"
 #include "i3.h"
 #include "x.h"
 #include "click.h"

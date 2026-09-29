@@ -233,6 +233,14 @@ struct Workspace_Assignment {
     TAILQ_ENTRY(Workspace_Assignment) ws_assignments;
 };
 
+struct Super_Workspace_Assignment {
+    char *name;
+    int num;
+    char *user;
+
+    TAILQ_ENTRY(Super_Workspace_Assignment) super_workspace_assignments;
+};
+
 struct Ignore_Event {
     int sequence;
     int response_type;
@@ -666,6 +674,17 @@ struct Con {
 
     /** Only applicable for containers of type CT_WORKSPACE. */
     gaps_t gaps;
+
+    /** The super workspace this workspace belongs to (CT_WORKSPACE only). */
+    int super_workspace;
+
+    /** Set while the workspace is stashed because another super workspace is
+     * active: the name of the output it was on. A stashed workspace counts as
+     * internal (see con_is_internal). */
+    char *ss_output;
+
+    /** Whether the workspace was visible on its output when it was stashed. */
+    bool ss_visible;
 
     struct Con *parent;
 

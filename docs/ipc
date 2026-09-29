@@ -68,6 +68,7 @@ to do that).
 | 10 | +SEND_TICK+ | <<_tick_reply,TICK>> | Sends a tick event with the specified payload.
 | 11 | +SYNC+ | <<_sync_reply,SYNC>> | Sends an i3 sync event with the specified random value to the specified window.
 | 12 | +GET_BINDING_STATE+ | <<_binding_state_reply,BINDING_STATE>> | Request the current binding state, i.e. the currently active binding mode name.
+| 13 | +GET_SUPER_WORKSPACES+ | <<_super_workspaces_reply,SUPER_WORKSPACES>> | Request the super workspaces: the active one, all known ones and the notification scope.
 |======================================================
 
 So, a typical message could look like this:
@@ -149,6 +150,8 @@ SYNC (11)::
 	Reply to the SYNC message.
 GET_BINDING_STATE (12)::
 	Reply to the GET_BINDING_STATE message.
+GET_SUPER_WORKSPACES (13)::
+	Reply to the GET_SUPER_WORKSPACES message.
 
 == Messages and replies
 
@@ -897,6 +900,51 @@ member, which is the name of the currently active binding mode as a string.
 { "name": "default" }
 -------------------
 
+[[_super_workspaces_reply]]
+=== GET_SUPER_WORKSPACES
+
+Requests the super workspaces.
+
+*Message:*
+
+No payload.
+
+*Reply:*
+
+A map with the active super workspace (+current+), the notification scope
+(+notifications+, either +"current"+ or +"all"+) and all known super
+workspaces (+super_workspaces+: configured ones, the active one and all which
+have workspaces), sorted by number. Each super workspace is a map with:
+
+num (integer)::
+	The number of the super workspace.
+name (string)::
+	Its configured name, the name it was switched to with, or its number.
+user (string or null)::
+	The user configured with +super_workspace <name> user <user>+.
+focused (boolean)::
+	Whether this is the active super workspace.
+workspaces (array of strings)::
+	The names of its workspaces (including the hidden ones of inactive
+	super workspaces).
+urgent (boolean)::
+	Whether one of its workspaces is urgent.
+
+*Example:*
+-------------------
+{
+ "current": { "num": 1, "name": "1:acme", "user": "acme", "focused": true,
+              "workspaces": [ "1", "2" ], "urgent": false },
+ "notifications": "current",
+ "super_workspaces": [
+  { "num": 0, "name": "0:", "user": null, "focused": false,
+    "workspaces": [ "1", "3" ], "urgent": true },
+  { "num": 1, "name": "1:acme", "user": "acme", "focused": true,
+    "workspaces": [ "1", "2" ], "urgent": false }
+ ]
+}
+-------------------
+
 == Events
 
 [[events]]
@@ -967,6 +1015,12 @@ tick (7)::
 	Sent when the ipc client subscribes to the tick event (with +"first":
 	true+) or when any ipc client sends a SEND_TICK message (with +"first":
 	false+).
+super_workspace (8)::
+	Sent when the active super workspace changes (+"change": "focus"+), when
+	the notification scope changes (+"notifications"+) or when a workspace of
+	an inactive super workspace becomes urgent (+"urgent"+). The payload is
+	the +GET_SUPER_WORKSPACES+ reply plus +change+ and +old+ (the previously
+	active super workspace or null).
 
 *Example:*
 --------------------------------------------------------------------
