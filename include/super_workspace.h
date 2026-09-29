@@ -17,6 +17,8 @@
 
 #include <yajl/yajl_gen.h>
 
+#include "data.h"
+
 /** Number of the currently active super workspace (0 by default). */
 extern int current_super_workspace;
 
@@ -33,6 +35,27 @@ extern bool super_workspace_notifications_all;
  *
  */
 bool super_workspace_switch_by_name(const char *name);
+
+/**
+ * Switches to the super workspace with the given number.
+ *
+ */
+void super_workspace_switch(int num);
+
+/**
+ * If |con| is on a stashed workspace, switches to its super workspace.
+ *
+ */
+void super_workspace_reveal(Con *con);
+
+/**
+ * Returns the workspace of super workspace |num| that windows moved there
+ * (e.g. |con|) should go to: the one focused when it was left, the one
+ * visible on the output of |con| or any of its workspaces. Creates its
+ * workspace 1 if it has none.
+ *
+ */
+Con *super_workspace_get_workspace(int num, Con *con);
 
 /**
  * Switches to the previously active super workspace.

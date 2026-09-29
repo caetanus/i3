@@ -371,6 +371,8 @@ state MOVE:
       -> MOVE_TO_MARK
   'scratchpad'
       -> call cmd_move_scratchpad()
+  'super_workspace'
+      -> MOVE_SUPER_WORKSPACE
   direction = 'left', 'right', 'up', 'down'
       -> MOVE_DIRECTION
   method = 'position'
@@ -389,6 +391,12 @@ state MOVE_DIRECTION_NUMBER:
       -> call cmd_move_direction($direction, &amount, $mode)
   end
       -> call cmd_move_direction($direction, &amount, "px")
+
+state MOVE_SUPER_WORKSPACE:
+  'number'
+      ->
+  name = string
+      -> call cmd_move_con_to_super_workspace($name)
 
 state MOVE_WORKSPACE:
   'to '

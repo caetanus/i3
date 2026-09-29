@@ -153,6 +153,12 @@ void cmd_super_workspace_back_and_forth(I3_CMD);
 void cmd_super_workspace_notifications(I3_CMD, const char *scope);
 
 /**
+ * Implementation of 'move [window|container] [to] super_workspace [number] <name>'.
+ *
+ */
+void cmd_move_con_to_super_workspace(I3_CMD, const char *name);
+
+/**
  * Implementation of 'move [window|container] [to] output <str>'.
  *
  */

@@ -179,7 +179,7 @@ static void fix_outputs(void) {
     }
 }
 
-static void super_workspace_switch(int num) {
+void super_workspace_switch(int num) {
     if (num == current_super_workspace) {
         DLOG("Already on super workspace %d\n", num);
         return;
@@ -226,6 +226,62 @@ static void super_workspace_switch(int num) {
 
     ewmh_update_desktop_properties();
     ipc_send_super_workspace_event("focus", old);
+}
+
+void super_workspace_reveal(Con *con) {
+    Con *ws = con_get_workspace(con);
+    if (ws != NULL && ws->type == CT_WORKSPACE && ws->ss_output != NULL)
+        super_workspace_switch(ws->super_workspace);
+}
+
+Con *super_workspace_get_workspace(int num, Con *con) {
+    Con *stash = stash_content();
+    Con *output = con_get_output(con);
+    struct ss_state *state = get_state(num);
+    Con *fallback = NULL, *ws;
+
+    /* The workspace which was focused when leaving the super workspace, the
+     * one which was visible on the same output, or any of its workspaces. */
+    TAILQ_FOREACH (ws, &(stash->nodes_head), nodes) {
+        if (ws->type != CT_WORKSPACE || ws->ss_output == NULL || ws->super_workspace != num)
+            continue;
+        if (state->last_workspace != NULL && strcasecmp(ws->name, state->last_workspace) == 0)
+            return ws;
+        if (ws->ss_visible && output != NULL && strcmp(ws->ss_output, output->name) == 0)
+            fallback = ws;
+        else if (fallback == NULL)
+            fallback = ws;
+    }
+    if (fallback != NULL)
+        return fallback;
+
+    /* The super workspace has no workspaces yet: create its workspace 1,
+     * stashed and visible on the output of |con|. */
+    ws = con_new(NULL, NULL);
+    ws->type = CT_WORKSPACE;
+    ws->name = sstrdup("1");
+    ws->num = 1;
+    ws->super_workspace = num;
+    ws->ss_output = sstrdup(output != NULL ? output->name : output_primary_name(get_first_output()));
+    ws->ss_visible = true;
+    ws->workspace_layout = config.default_layout;
+    /* Like _workspace_apply_default_orientation(), but for the output the
+     * workspace will be shown on: its own output is __i3 while stashed. */
+    if (config.default_orientation == NO_ORIENTATION) {
+        Con *target = (output != NULL ? output : get_first_output()->con);
+        ws->layout = (target->rect.height > target->rect.width) ? L_SPLITV : L_SPLITH;
+    } else {
+        ws->layout = (config.default_orientation == HORIZ) ? L_SPLITH : L_SPLITV;
+    }
+    con_attach(ws, stash, false);
+
+    char *name;
+    sasprintf(&name, "[i3 con] workspace %s", ws->name);
+    x_set_name(ws, name);
+    free(name);
+
+    ipc_send_super_workspace_event("init", -1);
+    return ws;
 }
 
 bool super_workspace_switch_by_name(const char *name) {

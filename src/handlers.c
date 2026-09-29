@@ -725,6 +725,24 @@ static void handle_client_message(xcb_client_message_event_t *event) {
             return;
         }
 
+        if (ws->ss_output != NULL) {
+            /* The window is on an inactive super workspace. A pager request is
+             * most likely a user action, so switch there; applications only
+             * get to mark the window urgent. */
+            if (event->data.data32[0] == 2) {
+                DLOG("Pager request for con = %p on an inactive super workspace, switching\n", con);
+                super_workspace_reveal(con);
+                workspace_show(con_get_workspace(con));
+                focused_id = XCB_NONE;
+                con_activate_unblock(con);
+            } else {
+                DLOG("Marking con = %p on an inactive super workspace urgent\n", con);
+                con_set_urgency(con, true);
+            }
+            tree_render();
+            return;
+        }
+
         if (con_is_internal(ws) && ws != workspace_get("__i3_scratch")) {
             DLOG("Workspace is internal but not scratchpad, ignoring _NET_ACTIVE_WINDOW\n");
             return;

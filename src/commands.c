@@ -1045,6 +1045,40 @@ void cmd_super_workspace(I3_CMD, const char *name) {
 }
 
 /*
+ * Implementation of 'move [window|container] [to] super_workspace [number] <name>'.
+ *
+ */
+void cmd_move_con_to_super_workspace(I3_CMD, const char *name) {
+    const int num = ws_name_to_number(name);
+    if (num == -1) {
+        yerror("Could not parse number \"%s\"", name);
+        return;
+    }
+
+    HANDLE_EMPTY_MATCH;
+
+    owindow *current;
+    TAILQ_FOREACH (current, &owindows, owindows) {
+        Con *ws = con_get_workspace(current->con);
+        if (ws == NULL || current->con->type == CT_WORKSPACE || (con_is_internal(ws) && ws->ss_output == NULL)) {
+            continue;
+        }
+        if (ws->super_workspace == num) {
+            continue;
+        }
+
+        Con *target = (num == current_super_workspace)
+                          ? con_get_workspace(focused)
+                          : super_workspace_get_workspace(num, current->con);
+        DLOG("Moving %p to workspace %s of super workspace %d\n", current->con, target->name, num);
+        con_move_to_workspace(current->con, target, true, false, false);
+    }
+
+    cmd_output->needs_tree_render = true;
+    ysuccess(true);
+}
+
+/*
  * Implementation of 'super_workspace back_and_forth'.
  *
  */
@@ -1536,6 +1570,10 @@ void cmd_focus(I3_CMD) {
              * multiple scratchpad windows. So, rather break here. */
             break;
         }
+
+        /* Windows of inactive super workspaces are on stashed workspaces:
+         * switch to their super workspace first. */
+        super_workspace_reveal(current->con);
 
         LOG("focusing %p / %s\n", current->con, current->con->name);
         con_activate_unblock(current->con);
