@@ -710,6 +710,24 @@ default_orientation horizontal|vertical|auto
 default_orientation vertical
 ----------------------------
 
+=== Automatic tiling
+
+With +autotiling+ enabled, i3 splits the focused window along its longer side
+before opening a new window next to it: a window wider than high gets the new
+window to its right, a window higher than wide gets it below. This replaces the
+external autotiling script. Tabbed and stacked containers, floating and
+fullscreen windows are not affected. The default is +off+.
+
+*Syntax*:
+---------------------
+autotiling on|off
+---------------------
+
+*Example*:
+---------------------
+autotiling on
+---------------------
+
 === Layout mode for new containers
 
 This option determines in which mode new containers on workspace level will

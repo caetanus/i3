@@ -277,6 +277,10 @@ struct Config {
 
     /* Disable gaps if there is only one container on the workspace */
     smart_gaps_t smart_gaps;
+
+    /* Split the focused window along its longer side before a new window is
+     * opened next to it (like the external autotiling script). */
+    bool autotiling;
 };
 
 /**

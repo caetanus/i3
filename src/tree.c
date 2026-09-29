@@ -143,11 +143,39 @@ void tree_init(xcb_get_geometry_reply_t *geometry) {
 }
 
 /*
+ * Splits |con| along its longer side, so that the next window opened next to
+ * it is placed to its right if it is wider than high, below it otherwise.
+ * Only tiled windows in split containers are considered; tabbed and stacked
+ * containers are left alone.
+ *
+ */
+void tree_autotile(Con *con) {
+    if (con == NULL || con->type != CT_CON || con->window == NULL ||
+        con_is_floating(con) || con->fullscreen_mode != CF_NONE)
+        return;
+
+    const layout_t parent_layout = con->parent->layout;
+    if (parent_layout != L_SPLITH && parent_layout != L_SPLITV)
+        return;
+
+    const orientation_t orientation = (con->rect.height > con->rect.width) ? VERT : HORIZ;
+    if (con_orientation(con->parent) == orientation)
+        return;
+
+    DLOG("autotiling: splitting %p %s\n", con,
+         orientation == VERT ? "vertically" : "horizontally");
+    tree_split(con, orientation);
+}
+
+/*
  * Opens an empty container in the current container
  *
  */
 Con *tree_open_con(Con *con, i3Window *window) {
     if (con == NULL) {
+        if (config.autotiling)
+            tree_autotile(focused);
+
         /* every focusable Con has a parent (outputs have parent root) */
         con = focused->parent;
         /* If the parent is an output, we are on a workspace. In this case,

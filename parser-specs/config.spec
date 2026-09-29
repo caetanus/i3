@@ -28,6 +28,7 @@ state INITIAL:
   'gaps'                                   -> GAPS
   'smart_borders'                          -> SMART_BORDERS
   'smart_gaps'                             -> SMART_GAPS
+  'autotiling'                             -> AUTOTILING
   'floating_minimum_size'                  -> FLOATING_MINIMUM_SIZE_WIDTH
   'floating_maximum_size'                  -> FLOATING_MAXIMUM_SIZE_WIDTH
   'floating_modifier'                      -> FLOATING_MODIFIER
@@ -93,6 +94,11 @@ state SMART_GAPS:
       -> call cfg_smart_gaps($enabled)
   enabled = 'inverse_outer'
       -> call cfg_smart_gaps($enabled)
+
+# autotiling on|off
+state AUTOTILING:
+  enabled = '1', 'yes', 'true', 'on', 'enable', 'active', '0', 'no', 'false', 'off', 'disable', 'inactive'
+      -> call cfg_autotiling($enabled)
 
 # include <pattern>
 state INCLUDE:
