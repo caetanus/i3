@@ -22,9 +22,9 @@
 /** Number of the currently active super workspace (0 by default). */
 extern int current_super_workspace;
 
-/** Whether notifications of all super workspaces should be shown, or only the
- * ones of the active super workspace. Only stored and reported via IPC; the
- * status bar implements it. */
+/** Whether notifications of all super workspaces should be shown (the
+ * default), or only the ones of the active super workspace. Only stored and
+ * reported via IPC; the status bar implements it. */
 extern bool super_workspace_notifications_all;
 
 /**

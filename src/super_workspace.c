@@ -13,7 +13,7 @@
 #include "yajl_utils.h"
 
 int current_super_workspace = 0;
-bool super_workspace_notifications_all = false;
+bool super_workspace_notifications_all = true;
 
 static int previous_super_workspace = -1;
 

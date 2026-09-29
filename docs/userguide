@@ -2647,7 +2647,8 @@ pager) switches to its super workspace; when an application of an inactive
 super workspace asks for focus, its window is marked urgent instead.
 
 +super_workspace notifications+ sets whether notifications of all super
-workspaces or only of the active one should be shown. i3 only stores this
+workspaces (+all+, the default) or only of the active one (+current+) should
+be shown. i3 only stores this
 setting and reports it via IPC; it is up to the status bar to implement it.
 
 *Syntax*:
