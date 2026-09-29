@@ -2640,6 +2640,12 @@ To switch to another super workspace (see <<_super_workspaces>>), use the
 +number+ is optional and accepted for symmetry with +workspace number+.
 +back_and_forth+ switches to the previously active super workspace.
 
++move container to super_workspace+ moves the focused (or matched) window to
+the workspace of the target super workspace that was focused when it was left.
+Focusing a window of an inactive super workspace (+[class="..."] focus+ or a
+pager) switches to its super workspace; when an application of an inactive
+super workspace asks for focus, its window is marked urgent instead.
+
 +super_workspace notifications+ sets whether notifications of all super
 workspaces or only of the active one should be shown. i3 only stores this
 setting and reports it via IPC; it is up to the status bar to implement it.
@@ -2649,6 +2655,7 @@ setting and reports it via IPC; it is up to the status bar to implement it.
 super_workspace [number] <name>
 super_workspace back_and_forth
 super_workspace notifications current|all|toggle
+move [window|container] [to] super_workspace [number] <name>
 ----------------------------------------------------
 
 *Examples*:
@@ -2656,6 +2663,7 @@ super_workspace notifications current|all|toggle
 bindsym Control+Mod4+1 super_workspace number $ss1
 bindsym Control+Mod4+Tab super_workspace back_and_forth
 bindsym Control+Mod4+n super_workspace notifications toggle
+bindsym Control+Mod4+Shift+1 move container to super_workspace number $ss1
 -----------------------------------------------------------------
 
 === Moving workspaces to a different screen
