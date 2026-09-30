@@ -131,6 +131,18 @@ void startup_sequence_delete(struct Startup_Sequence *sequence) {
  *
  */
 void start_application(const char *command, bool no_startup_id) {
+    start_application_as(command, no_startup_id, NULL);
+}
+
+/*
+ * Like start_application(), but runs |command| as |user| through the
+ * super_workspace_launcher ("<launcher> --user <user> /bin/sh -c <command>").
+ * With |user| NULL (or no launcher configured) this is start_application().
+ *
+ */
+void start_application_as(const char *command, bool no_startup_id, const char *user) {
+    if (config.super_workspace_launcher == NULL)
+        user = NULL;
     SnLauncherContext *context = NULL;
 
     if (!no_startup_id) {
@@ -171,7 +183,7 @@ void start_application(const char *command, bool no_startup_id) {
         sn_launcher_context_ref(context);
     }
 
-    LOG("executing: %s\n", command);
+    LOG("executing: %s%s%s\n", command, user ? " as " : "", user ? user : "");
     if (fork() == 0) {
         /* Child process */
         setsid();
@@ -192,6 +204,13 @@ void start_application(const char *command, bool no_startup_id) {
                 sn_launcher_context_setup_child_process(context);
             setenv("I3SOCK", current_socketpath, 1);
 
+            if (user != NULL) {
+                execlp(config.super_workspace_launcher, config.super_workspace_launcher,
+                       "--user", user, _PATH_BSHELL, "-c", command, NULL);
+                ELOG("Could not execute super_workspace_launcher \"%s\": %s\n",
+                     config.super_workspace_launcher, strerror(errno));
+                _exit(EXIT_FAILURE);
+            }
             execl(_PATH_BSHELL, _PATH_BSHELL, "-c", command, NULL);
             /* not reached */
         }

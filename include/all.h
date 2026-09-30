@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
+#include <pwd.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>

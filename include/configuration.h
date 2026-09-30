@@ -281,6 +281,11 @@ struct Config {
     /* Split the focused window along its longer side before a new window is
      * opened next to it (like the external autotiling script). */
     bool autotiling;
+
+    /* Program that runs exec commands as the user of the active super
+     * workspace: "<launcher> --user <user> /bin/sh -c <command>". NULL runs
+     * them as the i3 user. */
+    char *super_workspace_launcher;
 };
 
 /**

@@ -1372,9 +1372,16 @@ void cmd_exec(I3_CMD, const char *nosn, const char *command) {
             count);
     }
 
+    /* Programs started while a super workspace of another user is active run
+     * as that user (see super_workspace_launcher). */
+    const char *user = super_workspace_user(current_super_workspace);
+    const struct passwd *self = getpwuid(getuid());
+    if (user != NULL && self != NULL && strcmp(user, self->pw_name) == 0)
+        user = NULL;
+
     TAILQ_FOREACH (current, &owindows, owindows) {
         DLOG("should execute %s, no_startup_id = %d\n", command, no_startup_id);
-        start_application(command, no_startup_id);
+        start_application_as(command, no_startup_id, user);
     }
 
     ysuccess(true);

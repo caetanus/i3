@@ -389,6 +389,11 @@ CFGFUN(autotiling, const char *enable) {
     config.autotiling = boolstr(enable);
 }
 
+CFGFUN(super_workspace_launcher, const char *launcher) {
+    free(config.super_workspace_launcher);
+    config.super_workspace_launcher = sstrdup(launcher);
+}
+
 CFGFUN(super_workspace, const char *name, const char *user) {
     const int num = ws_name_to_number(name);
     if (num == -1) {

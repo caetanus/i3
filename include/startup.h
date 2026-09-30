@@ -33,6 +33,14 @@
 void start_application(const char *command, bool no_startup_id);
 
 /**
+ * Like start_application(), but runs |command| as |user| through the
+ * super_workspace_launcher ("<launcher> --user <user> /bin/sh -c <command>").
+ * With |user| NULL (or no launcher configured) this is start_application().
+ *
+ */
+void start_application_as(const char *command, bool no_startup_id, const char *user);
+
+/**
  * Deletes a startup sequence, ignoring whether its timeout has elapsed.
  * Useful when e.g. a window is moved between workspaces and its children
  * shouldn't spawn on the original workspace.

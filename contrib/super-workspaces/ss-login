@@ -1,0 +1,228 @@
+#!/usr/bin/python3
+# ss-login — log in as the user of a super workspace.
+#
+#   ss-login caetano-mph [label]
+#
+# Shows a login dialog for that user and starts ss-agent as that user with
+# `su -l` (so the password is checked like any su), under dbus-run-session.
+# Exits 0 once the agent answers, 1 when the dialog is cancelled. Does nothing
+# (exit 0) if the user's agent is already running. The su session is kept by a
+# background process until the agent exits.
+import os
+import pty
+import select
+import socket
+import sys
+import time
+
+AGENT = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ss-agent")
+
+
+def agent_socket(user):
+    return "/tmp/ss-agent-%s.sock" % user
+
+
+def agent_running(user):
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            sock.connect(agent_socket(user))
+        return True
+    except OSError:
+        return False
+
+
+def read_until(fd, needles, timeout):
+    """Reads from |fd| until one of |needles| shows up. Returns the output, or
+    None on EOF/timeout."""
+    output = b""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ready, _, _ = select.select([fd], [], [], max(0, deadline - time.monotonic()))
+        if not ready:
+            break
+        try:
+            chunk = os.read(fd, 1024)
+        except OSError:
+            return None
+        if not chunk:
+            return None
+        output += chunk
+        if any(needle in output.lower() for needle in needles):
+            return output
+    return None
+
+
+def keep_session(fd, user):
+    """Detaches: drains the su terminal into a log until su exits, so that the
+    agent never blocks on a full terminal buffer."""
+    if os.fork() != 0:
+        return
+    os.setsid()
+    if os.fork() != 0:
+        os._exit(0)
+    with open("/tmp/ss-agent-%s.log" % user, "ab", buffering=0) as log:
+        while True:
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            log.write(chunk)
+    os._exit(0)
+
+
+def try_login(user, password):
+    """Starts `su -l user` on a terminal and types |password|. Returns True
+    once the agent is up; kills su and returns False otherwise."""
+    command = "exec dbus-run-session -- %s --owner %d" % (AGENT, os.getuid())
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.environ["LC_ALL"] = "C"  # English prompt, matched below
+        os.execvp("su", ["su", "-l", user, "-c", command])
+
+    if read_until(fd, [b"password:"], 10) is None:
+        os.kill(pid, 9)
+        os.waitpid(pid, 0)
+        return False
+    os.write(fd, password.encode() + b"\n")
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        done, _ = os.waitpid(pid, os.WNOHANG)
+        if done:  # su gave up: wrong password
+            os.close(fd)
+            return False
+        if agent_running(user):
+            keep_session(fd, user)
+            os.close(fd)
+            return True
+        read_until(fd, [], 0.1)  # keep the terminal drained while waiting
+
+    os.kill(pid, 9)
+    os.waitpid(pid, 0)
+    return False
+
+
+def dialog(user, label):
+    from PySide6.QtCore import Qt, QThread, Signal
+    from PySide6.QtWidgets import (QApplication, QDialog, QLabel, QLineEdit,
+                                   QPushButton, QHBoxLayout, QVBoxLayout)
+
+    class Login(QThread):
+        finished_login = Signal(bool)
+
+        def __init__(self, password):
+            super().__init__()
+            self.password = password
+
+        def run(self):
+            self.finished_login.emit(try_login(user, self.password))
+
+    app = QApplication(sys.argv[:1])
+    app.setApplicationName("ss-login")
+    app.setDesktopFileName("ss-login")
+
+    window = QDialog()
+    window.setWindowTitle("Entrar em %s" % label)
+    window.setStyleSheet("""
+        QDialog { background: #1e2230; }
+        QLabel { color: #eef2f7; }
+        QLabel#title { font-size: 18pt; font-weight: 600; }
+        QLabel#user { color: #9aa3b5; }
+        QLabel#error { color: #f38ba8; }
+        QLineEdit { background: #2a3042; color: #eef2f7; border: 1px solid #3a4258;
+                    border-radius: 6px; padding: 8px; font-size: 12pt; }
+        QLineEdit:focus { border-color: #63b3ed; }
+        QPushButton { background: #63b3ed; color: #10131c; border: none;
+                      border-radius: 6px; padding: 8px 18px; font-weight: 600; }
+        QPushButton:disabled { background: #3a4258; color: #9aa3b5; }
+        QPushButton#cancel { background: transparent; color: #9aa3b5; }
+    """)
+
+    title = QLabel(label)
+    title.setObjectName("title")
+    title.setAlignment(Qt.AlignCenter)
+    who = QLabel(user)
+    who.setObjectName("user")
+    who.setAlignment(Qt.AlignCenter)
+    password = QLineEdit()
+    password.setEchoMode(QLineEdit.Password)
+    password.setPlaceholderText("Senha")
+    error = QLabel("")
+    error.setObjectName("error")
+    error.setAlignment(Qt.AlignCenter)
+    cancel = QPushButton("Cancelar")
+    cancel.setObjectName("cancel")
+    # Only "Entrar" reacts to Enter: an auto-default Cancel would become the
+    # default button as soon as it gets focus.
+    cancel.setAutoDefault(False)
+    enter = QPushButton("Entrar")
+    enter.setDefault(True)
+
+    buttons = QHBoxLayout()
+    buttons.addWidget(cancel)
+    buttons.addStretch()
+    buttons.addWidget(enter)
+    layout = QVBoxLayout(window)
+    layout.setContentsMargins(28, 24, 28, 20)
+    layout.setSpacing(10)
+    layout.addWidget(title)
+    layout.addWidget(who)
+    layout.addSpacing(8)
+    layout.addWidget(password)
+    layout.addWidget(error)
+    layout.addLayout(buttons)
+    window.setFixedWidth(360)
+
+    state = {"thread": None}
+
+    def busy(on):
+        # Read-only instead of disabled: a disabled field hands its focus on.
+        password.setReadOnly(on)
+        enter.setEnabled(not on)
+        enter.setText("Entrando…" if on else "Entrar")
+
+    def done(ok):
+        if ok:
+            window.accept()
+            return
+        busy(False)
+        error.setText("Senha incorreta.")
+        password.selectAll()
+        password.setFocus()
+
+    def submit():
+        if not password.text() or state["thread"] is not None and state["thread"].isRunning():
+            return
+        error.setText("")
+        busy(True)
+        thread = Login(password.text())
+        thread.finished_login.connect(done)
+        state["thread"] = thread
+        thread.start()
+
+    enter.clicked.connect(submit)  # also Enter: it is the default button
+    cancel.clicked.connect(window.reject)
+
+    password.setFocus()
+    result = window.exec()
+    if state["thread"] is not None:
+        state["thread"].wait()
+    return result == QDialog.Accepted
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: ss-login <user> [label]")
+    user = sys.argv[1]
+    label = sys.argv[2] if len(sys.argv) > 2 else user
+
+    if agent_running(user):
+        return 0
+    return 0 if dialog(user, label) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -34,6 +34,7 @@ state INITIAL:
   'floating_modifier'                      -> FLOATING_MODIFIER
   'default_orientation'                    -> DEFAULT_ORIENTATION
   'workspace_layout'                       -> WORKSPACE_LAYOUT
+  'super_workspace_launcher'               -> SUPER_WORKSPACE_LAUNCHER
   'super_workspace'                        -> SUPER_WORKSPACE
   windowtype = 'default_border', 'new_window', 'default_floating_border', 'new_float'
       -> DEFAULT_BORDER
@@ -100,6 +101,11 @@ state SMART_GAPS:
 state AUTOTILING:
   enabled = '1', 'yes', 'true', 'on', 'enable', 'active', '0', 'no', 'false', 'off', 'disable', 'inactive'
       -> call cfg_autotiling($enabled)
+
+# super_workspace_launcher <command>
+state SUPER_WORKSPACE_LAUNCHER:
+  launcher = string
+      -> call cfg_super_workspace_launcher($launcher)
 
 # super_workspace <name> [user <user>]
 state SUPER_WORKSPACE:

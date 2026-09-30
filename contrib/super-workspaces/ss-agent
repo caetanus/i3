@@ -1,0 +1,111 @@
+#!/usr/bin/python3
+# ss-agent — runs programs for ss-run as the user of a super workspace.
+#
+# Started by ss-login inside `su -l <user>` (after the user typed that user's
+# password) under dbus-run-session, so programs get that user's own D-Bus
+# session bus:
+#
+#   ss-agent --owner <uid of the desktop user>
+#
+# Listens on /tmp/ss-agent-<user>.sock and only serves connections from the
+# owner (checked with SO_PEERCRED). Each connection sends one JSON line
+#
+#   {"argv": ["tilix"], "env": {"DISPLAY": ":0", ...}}
+#
+# and gets one JSON line back ({"ok": true, "pid": ...} or {"ok": false,
+# "error": ...}). Programs run in their own session, so they survive the agent.
+import getpass
+import json
+import os
+import socket
+import struct
+import subprocess
+import sys
+
+# Only these variables are taken from the request; everything else comes from
+# this user's login environment.
+PASSED_ENV = ("DISPLAY", "XAUTHORITY", "PULSE_SERVER", "LANG", "LC_ALL",
+              "XDG_CURRENT_DESKTOP", "DESKTOP_STARTUP_ID", "TERM")
+
+
+def socket_path(user):
+    return "/tmp/ss-agent-%s.sock" % user
+
+
+def runtime_dir():
+    """su does not open a logind session, so there is no /run/user/<uid>:
+    use a private directory instead."""
+    path = os.environ.get("XDG_RUNTIME_DIR")
+    if path and os.path.isdir(path) and os.access(path, os.W_OK):
+        return path
+    path = "/tmp/ss-runtime-%d" % os.getuid()
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    os.chmod(path, 0o700)
+    return path
+
+
+def run(request, base_env):
+    argv = request.get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
+        return {"ok": False, "error": "argv must be a non-empty list of strings"}
+
+    env = dict(base_env)
+    for key in PASSED_ENV:
+        value = (request.get("env") or {}).get(key)
+        if isinstance(value, str):
+            env[key] = value
+
+    try:
+        process = subprocess.Popen(argv, env=env, cwd=os.path.expanduser("~"),
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as e:
+        return {"ok": False, "error": "%s: %s" % (argv[0], e.strerror)}
+    return {"ok": True, "pid": process.pid}
+
+
+def peer_uid(conn):
+    creds = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+    _pid, uid, _gid = struct.unpack("3i", creds)
+    return uid
+
+
+def main():
+    if len(sys.argv) != 3 or sys.argv[1] != "--owner" or not sys.argv[2].isdigit():
+        sys.exit("usage: ss-agent --owner <uid>")
+    owner = int(sys.argv[2])
+
+    base_env = dict(os.environ)
+    base_env["XDG_RUNTIME_DIR"] = runtime_dir()
+
+    path = socket_path(getpass.getuser())
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(path)
+    # The owner (another uid) has to be able to connect; everybody else is
+    # turned away below.
+    os.chmod(path, 0o666)
+    server.listen(16)
+
+    while True:
+        conn, _ = server.accept()
+        with conn:
+            if peer_uid(conn) != owner:
+                continue
+            try:
+                line = conn.makefile("r").readline()
+                reply = run(json.loads(line), base_env)
+            except Exception as e:  # malformed request: report, keep serving
+                reply = {"ok": False, "error": str(e)}
+            try:
+                conn.sendall((json.dumps(reply) + "\n").encode())
+            except OSError:
+                pass
+
+
+if __name__ == "__main__":
+    main()
