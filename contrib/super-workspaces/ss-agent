@@ -14,9 +14,11 @@
 #
 # and gets one JSON line back ({"ok": true, "pid": ...} or {"ok": false,
 # "error": ...}). Programs run in their own session, so they survive the agent.
+# Also starts ss-notify-relay, the notification server of this user's session.
 import getpass
 import json
 import os
+import pwd
 import socket
 import struct
 import subprocess
@@ -90,6 +92,11 @@ def main():
     # turned away below.
     os.chmod(path, 0o666)
     server.listen(16)
+
+    # Notifications of this user's programs go to the owner's session.
+    relay = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ss-notify-relay")
+    subprocess.Popen([relay, "--owner-user", pwd.getpwuid(owner).pw_name],
+                     stdin=subprocess.DEVNULL, start_new_session=True)
 
     while True:
         conn, _ = server.accept()

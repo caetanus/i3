@@ -1,0 +1,240 @@
+#!/usr/bin/python3
+# ss-notify-hub — shows notifications of super workspace users.
+#
+#   ss-notify-hub [--allow-uid <uid>]...
+#
+# Started by ss-session (desktop user). Listens on /tmp/ss-notify-<user>.sock
+# for the ss-notify-relay of every super workspace user (only their uids get
+# in, checked with SO_PEERCRED) and passes their notifications to the
+# notification server of this session (e.g. qbar), tagged with the super
+# workspace: the app name becomes "[1:mph] Slack" and the hint
+# "x-super-workspace" holds "1:mph". Actions, replies and closes go back to
+# the relay. Activating a notification of another super workspace switches
+# there first. With `super_workspace notifications current` in i3, only the
+# notifications of the active super workspace are shown.
+#
+# See ss-notify-relay for the protocol.
+import base64
+import getpass
+import json
+import os
+import pwd
+import socket
+import struct
+import subprocess
+import sys
+
+import gi
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+NAME = "org.freedesktop.Notifications"
+PATH = "/org/freedesktop/Notifications"
+I3_MAGIC = b"i3-ipc"
+GET_SUPER_WORKSPACES = 13
+
+
+def i3_state():
+    """GET_SUPER_WORKSPACES, or None without (our) i3."""
+    try:
+        path = os.environ.get("I3SOCK") or subprocess.run(
+            ["i3", "--get-socketpath"], capture_output=True, text=True, check=True).stdout.strip()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(2)
+            sock.connect(path)
+            sock.sendall(I3_MAGIC + struct.pack("<II", 0, GET_SUPER_WORKSPACES))
+            data = b""
+            while len(data) < 14:
+                chunk = sock.recv(14 - len(data))
+                if not chunk:
+                    return None
+                data += chunk
+            length, _ = struct.unpack("<II", data[6:])
+            body = b""
+            while len(body) < length:
+                chunk = sock.recv(length - len(body))
+                if not chunk:
+                    return None
+                body += chunk
+        return json.loads(body)
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        return None
+
+
+def decode_hints(encoded):
+    hints = {}
+    for key, signature, value in encoded:
+        try:
+            if signature == "(iiibiiay)":
+                width, height, rowstride, alpha, bits, channels, data = value
+                hints[key] = GLib.Variant(signature, (width, height, rowstride, alpha, bits,
+                                                      channels, base64.b64decode(data)))
+            else:
+                hints[key] = GLib.Variant(signature, value)
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return hints
+
+
+def peer_uid(sock):
+    creds = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+    return struct.unpack("3i", creds)[1]
+
+
+class Relay:
+    """One connected ss-notify-relay."""
+
+    def __init__(self, hub, sock, user):
+        self.hub, self.sock, self.user = hub, sock, user
+        self.buffer = b""
+        self.to_local = {}  # relay id -> local id
+        GLib.io_add_watch(sock.fileno(), GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, self.on_input)
+
+    def send(self, message):
+        try:
+            self.sock.sendall((json.dumps(message) + "\n").encode())
+        except OSError:
+            pass
+
+    def on_input(self, fd, condition):
+        try:
+            chunk = self.sock.recv(65536)
+        except OSError:
+            chunk = b""
+        if not chunk:
+            self.hub.forget(self)
+            self.sock.close()
+            return False
+        self.buffer += chunk
+        while b"\n" in self.buffer:
+            line, self.buffer = self.buffer.split(b"\n", 1)
+            try:
+                message = json.loads(line)
+                if message["type"] == "notify":
+                    self.hub.notify(self, message)
+                elif message["type"] == "close":
+                    self.hub.close(self, int(message["id"]))
+            except (ValueError, KeyError, TypeError, GLib.Error):
+                pass
+        return True
+
+
+class Hub:
+    def __init__(self, allowed_uids):
+        self.allowed_uids = set(allowed_uids)
+        self.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        self.from_local = {}  # local id -> (relay, relay id, super workspace num)
+        for signal in ("ActionInvoked", "NotificationClosed", "NotificationReplied"):
+            self.bus.signal_subscribe(None, NAME, signal, PATH, None,
+                                      Gio.DBusSignalFlags.NONE, self.on_signal, None)
+
+        path = "/tmp/ss-notify-%s.sock" % getpass.getuser()
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            probe.connect(path)
+            sys.exit("another ss-notify-hub is running")
+        except OSError:
+            pass
+        finally:
+            probe.close()
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server.bind(path)
+        os.chmod(path, 0o666)  # relays run as other users; see on_accept
+        self.server.listen(16)
+        GLib.io_add_watch(self.server.fileno(), GLib.IO_IN, self.on_accept)
+
+    def super_workspace_users(self, state):
+        users = {}
+        for ss in (state or {}).get("super_workspaces", []):
+            if ss.get("user"):
+                users[ss["user"]] = ss
+        return users
+
+    def on_accept(self, fd, condition):
+        sock, _ = self.server.accept()
+        uid = peer_uid(sock)
+        try:
+            user = pwd.getpwuid(uid).pw_name
+        except KeyError:
+            sock.close()
+            return True
+        if uid not in self.allowed_uids and user not in self.super_workspace_users(i3_state()):
+            sock.close()
+            return True
+        Relay(self, sock, user)
+        return True
+
+    def forget(self, relay):
+        for local, (owner, _, _) in list(self.from_local.items()):
+            if owner is relay:
+                del self.from_local[local]
+
+    def notify(self, relay, message):
+        state = i3_state()
+        ss = self.super_workspace_users(state).get(relay.user, {})
+        label = ss.get("name", relay.user)
+        num = ss.get("num")
+        if state and state.get("notifications") == "current" and num is not None \
+                and num != state["current"]["num"]:
+            return
+
+        hints = decode_hints(message.get("hints", []))
+        hints["x-super-workspace"] = GLib.Variant("s", label)
+        app_name = "[%s] %s" % (label, message.get("app_name") or relay.user)
+        replaces = relay.to_local.get(int(message["id"]), 0)
+        reply = self.bus.call_sync(
+            NAME, PATH, NAME, "Notify",
+            GLib.Variant("(susssasa{sv}i)", (app_name, replaces, message.get("app_icon", ""),
+                                             message.get("summary", ""), message.get("body", ""),
+                                             message.get("actions", []), hints,
+                                             int(message.get("expire_timeout", -1)))),
+            GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 5000, None)
+        (local,) = reply.unpack()
+        relay.to_local[int(message["id"])] = local
+        self.from_local[local] = (relay, int(message["id"]), num)
+
+    def close(self, relay, relay_id):
+        local = relay.to_local.pop(relay_id, None)
+        if local is not None:
+            self.bus.call(NAME, PATH, NAME, "CloseNotification", GLib.Variant("(u)", (local,)),
+                          None, Gio.DBusCallFlags.NONE, 5000, None, None, None)
+
+    def on_signal(self, connection, sender, path, interface, signal, parameters, _):
+        values = parameters.unpack()
+        entry = self.from_local.get(values[0])
+        if entry is None:
+            return
+        relay, relay_id, num = entry
+        if signal == "ActionInvoked":
+            state = i3_state()
+            if num is not None and state and state["current"]["num"] != num:
+                subprocess.run(["i3-msg", "super_workspace number %d" % num],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            relay.send({"type": "action", "id": relay_id, "key": values[1]})
+        elif signal == "NotificationReplied":
+            relay.send({"type": "replied", "id": relay_id, "text": values[1]})
+        elif signal == "NotificationClosed":
+            relay.send({"type": "closed", "id": relay_id, "reason": values[1]})
+            del self.from_local[values[0]]
+            relay.to_local.pop(relay_id, None)
+
+
+def main():
+    args = sys.argv[1:]
+    allowed = []
+    while args[:1] == ["--allow-uid"] and len(args) >= 2:
+        allowed.append(int(args[1]))
+        args = args[2:]
+    if args:
+        sys.exit("usage: ss-notify-hub [--allow-uid <uid>]...")
+    Hub(allowed)
+    GLib.MainLoop().run()
+
+
+if __name__ == "__main__":
+    main()

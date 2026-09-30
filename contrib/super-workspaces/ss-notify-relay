@@ -1,0 +1,195 @@
+#!/usr/bin/python3
+# ss-notify-relay — notification server for a super workspace user.
+#
+#   ss-notify-relay --owner-user caetano
+#
+# Started by ss-agent on the super workspace user's D-Bus session bus. Owns
+# org.freedesktop.Notifications there and hands every notification to the
+# desktop user's ss-notify-hub (/tmp/ss-notify-<owner>.sock), which shows it
+# in the desktop session. Actions, replies and closes come back the same way
+# and are emitted here as the usual signals, so applications of the super
+# workspace user get them like from any notification server.
+#
+# Protocol (one JSON object per line, both ways):
+#   relay -> hub: {"type": "notify", "id", "app_name", "app_icon", "summary",
+#                  "body", "actions", "hints": [[key, signature, value]...],
+#                  "expire_timeout"}
+#                 {"type": "close", "id"}
+#   hub -> relay: {"type": "action", "id", "key"}, {"type": "closed", "id",
+#                  "reason"}, {"type": "replied", "id", "text"}
+import base64
+import json
+import socket
+import sys
+
+import gi
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+INTERFACE = """
+<node>
+  <interface name="org.freedesktop.Notifications">
+    <method name="Notify">
+      <arg type="s" direction="in"/><arg type="u" direction="in"/>
+      <arg type="s" direction="in"/><arg type="s" direction="in"/>
+      <arg type="s" direction="in"/><arg type="as" direction="in"/>
+      <arg type="a{sv}" direction="in"/><arg type="i" direction="in"/>
+      <arg type="u" direction="out"/>
+    </method>
+    <method name="CloseNotification"><arg type="u" direction="in"/></method>
+    <method name="GetCapabilities"><arg type="as" direction="out"/></method>
+    <method name="GetServerInformation">
+      <arg type="s" direction="out"/><arg type="s" direction="out"/>
+      <arg type="s" direction="out"/><arg type="s" direction="out"/>
+    </method>
+    <signal name="NotificationClosed"><arg type="u"/><arg type="u"/></signal>
+    <signal name="ActionInvoked"><arg type="u"/><arg type="s"/></signal>
+    <signal name="NotificationReplied"><arg type="u"/><arg type="s"/></signal>
+  </interface>
+</node>
+"""
+PATH = "/org/freedesktop/Notifications"
+NAME = "org.freedesktop.Notifications"
+CAPABILITIES = ["body", "body-markup", "body-hyperlinks", "icon-static",
+                "persistence", "actions", "inline-reply", "x-dunst-stack-tag"]
+IMAGE_HINTS = ("image-data", "image_data", "icon_data")
+QUEUE_LIMIT = 50
+
+
+def encode_hints(hints):
+    """a{sv} GLib.Variant -> [[key, signature, value]] with JSON-compatible
+    values, keeping the D-Bus types (e.g. "urgency" is a byte)."""
+    encoded = []
+    for i in range(hints.n_children()):
+        entry = hints.get_child_value(i)
+        key = entry.get_child_value(0).get_string()
+        variant = entry.get_child_value(1).get_variant()
+        signature = variant.get_type_string()
+        if key in IMAGE_HINTS and signature == "(iiibiiay)":
+            width, height, rowstride, alpha, bits, channels, data = variant.unpack()
+            value = [width, height, rowstride, alpha, bits, channels,
+                     base64.b64encode(bytes(data)).decode()]
+        elif signature in ("s", "b", "y", "i", "u", "x", "t", "d", "n", "q"):
+            value = variant.unpack()
+        else:
+            continue  # nothing else is used by notification servers in practice
+        encoded.append([key, signature, value])
+    return encoded
+
+
+class Relay:
+    def __init__(self, owner):
+        self.hub_path = "/tmp/ss-notify-%s.sock" % owner
+        self.hub = None
+        self.buffer = b""
+        self.queue = []
+        self.next_id = 1
+        self.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        info = Gio.DBusNodeInfo.new_for_xml(INTERFACE).interfaces[0]
+        # register_object is deprecated since PyGObject 3.52
+        register = getattr(self.bus, "register_object_with_closures2", None) or self.bus.register_object
+        register(PATH, info, self.on_call, None, None)
+        Gio.bus_own_name_on_connection(self.bus, NAME, Gio.BusNameOwnerFlags.REPLACE,
+                                       None, lambda *_: sys.exit("lost %s" % NAME))
+        self.connect_hub()
+        GLib.timeout_add_seconds(2, self.connect_hub)
+
+    # --- hub connection -----------------------------------------------------
+
+    def connect_hub(self):
+        if self.hub is not None:
+            return True
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.connect(self.hub_path)
+        except OSError:
+            sock.close()
+            return True  # keep retrying
+        self.hub = sock
+        self.buffer = b""
+        GLib.io_add_watch(sock.fileno(), GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, self.on_hub)
+        queued, self.queue = self.queue, []
+        for message in queued:
+            self.send(message)
+        return True
+
+    def send(self, message):
+        if self.hub is None:
+            self.queue = (self.queue + [message])[-QUEUE_LIMIT:]
+            return
+        try:
+            self.hub.sendall((json.dumps(message) + "\n").encode())
+        except OSError:
+            self.drop_hub()
+            self.queue = (self.queue + [message])[-QUEUE_LIMIT:]
+
+    def drop_hub(self):
+        if self.hub is not None:
+            self.hub.close()
+            self.hub = None
+
+    def on_hub(self, fd, condition):
+        try:
+            chunk = self.hub.recv(65536) if self.hub is not None else b""
+        except OSError:
+            chunk = b""
+        if not chunk:
+            self.drop_hub()
+            return False
+        self.buffer += chunk
+        while b"\n" in self.buffer:
+            line, self.buffer = self.buffer.split(b"\n", 1)
+            try:
+                self.on_hub_message(json.loads(line))
+            except (ValueError, KeyError, TypeError):
+                pass
+        return True
+
+    def on_hub_message(self, message):
+        kind, nid = message["type"], int(message["id"])
+        if kind == "action":
+            self.emit("ActionInvoked", GLib.Variant("(us)", (nid, str(message["key"]))))
+        elif kind == "replied":
+            self.emit("NotificationReplied", GLib.Variant("(us)", (nid, str(message["text"]))))
+        elif kind == "closed":
+            self.emit("NotificationClosed", GLib.Variant("(uu)", (nid, int(message["reason"]))))
+
+    def emit(self, signal, parameters):
+        self.bus.emit_signal(None, PATH, NAME, signal, parameters)
+
+    # --- D-Bus methods ------------------------------------------------------
+
+    def on_call(self, connection, sender, path, interface, method, parameters, invocation):
+        if method == "Notify":
+            app_name, replaces_id, app_icon, summary, body, actions, _, timeout = parameters.unpack()
+            nid = replaces_id
+            if nid == 0:
+                nid = self.next_id
+                self.next_id += 1
+            self.send({"type": "notify", "id": nid, "app_name": app_name, "app_icon": app_icon,
+                       "summary": summary, "body": body, "actions": list(actions),
+                       "hints": encode_hints(parameters.get_child_value(6)),
+                       "expire_timeout": timeout})
+            invocation.return_value(GLib.Variant("(u)", (nid,)))
+        elif method == "CloseNotification":
+            (nid,) = parameters.unpack()
+            self.send({"type": "close", "id": nid})
+            invocation.return_value(None)
+        elif method == "GetCapabilities":
+            invocation.return_value(GLib.Variant("(as)", (CAPABILITIES,)))
+        elif method == "GetServerInformation":
+            invocation.return_value(GLib.Variant("(ssss)", ("ss-notify-relay", "caetanus", "1", "1.2")))
+        else:
+            invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", method)
+
+
+def main():
+    if len(sys.argv) != 3 or sys.argv[1] != "--owner-user":
+        sys.exit("usage: ss-notify-relay --owner-user <user>")
+    Relay(sys.argv[2])
+    GLib.MainLoop().run()
+
+
+if __name__ == "__main__":
+    main()
