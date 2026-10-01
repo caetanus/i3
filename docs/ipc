@@ -421,6 +421,12 @@ window (integer or null)::
 	This field is set to +null+ for split containers or otherwise empty
 	containers. This ID corresponds to what xwininfo(1) and other
 	X11-related tools display (usually in hex).
+window_uid (integer or null)::
+	The Unix user owning the client of +window+, when it is local (via the
+	X-Resource extension).
+super_workspace_pinned (boolean)::
+	Whether this container is pinned to all super workspaces
+	(+super_workspace pin+).
 window_properties (map)::
 	This optional field contains all available X11 window properties from the
 	following list: *title*, *instance*, *class*, *window_role*, *machine*

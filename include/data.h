@@ -237,6 +237,9 @@ struct Super_Workspace_Assignment {
     char *name;
     int num;
     char *user;
+    /* uid of |user|, if it exists */
+    uid_t uid;
+    bool has_uid;
 
     TAILQ_ENTRY(Super_Workspace_Assignment) super_workspace_assignments;
 };
@@ -423,6 +426,11 @@ struct xoutput {
  */
 struct Window {
     xcb_window_t id;
+
+    /** The Unix user owning the client (via the X-Resource extension), if
+     * known (local clients only). */
+    uid_t uid;
+    bool uid_known;
 
     /** Holds the xcb_window_t (just an ID) for the leader window (logical
      * parent for toolwindows and similar floating windows) */
@@ -685,6 +693,10 @@ struct Con {
 
     /** Whether the workspace was visible on its output when it was stashed. */
     bool ss_visible;
+
+    /** Whether this container follows into every super workspace (moved to
+     * the workspace with the same number on switching). */
+    bool ss_pinned;
 
     struct Con *parent;
 

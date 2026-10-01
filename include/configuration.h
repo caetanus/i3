@@ -243,6 +243,9 @@ struct Config {
         struct Colortriple unfocused;
         struct Colortriple urgent;
         struct Colortriple placeholder;
+        /* Windows whose user is not the user of their super workspace. */
+        struct Colortriple alien;
+        struct Colortriple focused_alien;
         bool got_focused_tab_title;
     } client;
     struct config_bar {

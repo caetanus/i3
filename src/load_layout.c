@@ -548,6 +548,9 @@ static int json_bool(void *ctx, int val) {
     if (strcasecmp(last_key, "ss_visible") == 0)
         json_node->ss_visible = val;
 
+    if (strcasecmp(last_key, "super_workspace_pinned") == 0)
+        json_node->ss_pinned = val;
+
     if (parsing_swallows) {
         if (strcasecmp(last_key, "restart_mode") == 0) {
             current_swallow->restart_mode = val;

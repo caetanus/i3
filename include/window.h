@@ -65,6 +65,13 @@ void window_update_strut_partial(i3Window *win, xcb_get_property_reply_t *prop);
 void window_update_role(i3Window *win, xcb_get_property_reply_t *prop);
 
 /**
+ * Finds out the Unix user owning the client of |win| (pid via the X-Resource
+ * extension, uid via /proc). Leaves win->uid_known false for remote clients.
+ *
+ */
+void window_update_owner(i3Window *win);
+
+/**
  * Updates the _NET_WM_WINDOW_TYPE property.
  *
  */

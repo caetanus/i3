@@ -414,6 +414,15 @@ CFGFUN(super_workspace, const char *name, const char *user) {
     assignment->name = sstrdup(name);
     assignment->num = num;
     assignment->user = (user != NULL ? sstrdup(user) : NULL);
+    if (user != NULL) {
+        const struct passwd *pw = getpwnam(user);
+        if (pw != NULL) {
+            assignment->uid = pw->pw_uid;
+            assignment->has_uid = true;
+        } else {
+            ELOG("super_workspace \"%s\": user \"%s\" does not exist\n", name, user);
+        }
+    }
     TAILQ_INSERT_TAIL(&super_workspace_assignments, assignment, super_workspace_assignments);
 }
 
@@ -686,6 +695,8 @@ CFGFUN(color, const char *colorclass, const char *border, const char *background
     APPLY_COLORS(unfocused);
     APPLY_COLORS(urgent);
     APPLY_COLORS(placeholder);
+    APPLY_COLORS(alien);
+    APPLY_COLORS(focused_alien);
 
 #undef APPLY_COLORS
 }

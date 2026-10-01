@@ -1166,6 +1166,13 @@ client.urgent::
 client.placeholder::
 	Background and text color are used to draw placeholder window contents
 	(when restoring layouts). Border and indicator are ignored.
+client.alien::
+	A window whose user is not the user of its super workspace (see
+	<<_super_workspaces>>), e.g. a window of your own user on a super
+	workspace configured with +user+, or a pinned window following you
+	there. Used instead of the unfocused/focused_inactive colors.
+client.focused_alien::
+	Like +client.alien+, for the focused window.
 client.background::
         Background color which will be used to paint the background of the
         client window on top of which the client will be rendered. Only clients
@@ -1182,6 +1189,8 @@ client.focused_inactive #333333 #5f676a #ffffff #484e50   #5f676a
 client.unfocused        #333333 #222222 #888888 #292d2e   #222222
 client.urgent           #2f343a #900000 #ffffff #900000   #900000
 client.placeholder      #000000 #0c0c0c #ffffff #000000   #0c0c0c
+client.alien            #7a4a1a #4a2f12 #d0b090 #7a4a1a   #7a4a1a
+client.focused_alien    #f0a030 #b06a10 #ffffff #ffc060   #f0a030
 
 client.background       #ffffff
 ----------------------------------------------------------------------
@@ -2646,6 +2655,12 @@ Focusing a window of an inactive super workspace (+[class="..."] focus+ or a
 pager) switches to its super workspace; when an application of an inactive
 super workspace asks for focus, its window is marked urgent instead.
 
++super_workspace pin+ pins windows to all super workspaces: when switching,
+a pinned window moves along to the workspace with the same number (or name)
+in the target super workspace. Use it with criteria, e.g. in a +for_window+
+rule. Windows whose user differs from the user of their super workspace get
+the +client.alien+ / +client.focused_alien+ colors.
+
 +super_workspace notifications+ sets whether notifications of all super
 workspaces (+all+, the default) or only of the active one (+current+) should
 be shown. i3 only stores this
@@ -2656,6 +2671,7 @@ setting and reports it via IPC; it is up to the status bar to implement it.
 super_workspace [number] <name>
 super_workspace back_and_forth
 super_workspace notifications current|all|toggle
+super_workspace pin enable|disable|toggle
 move [window|container] [to] super_workspace [number] <name>
 ----------------------------------------------------
 
@@ -2665,6 +2681,8 @@ bindsym Control+Mod4+1 super_workspace number $ss1
 bindsym Control+Mod4+Tab super_workspace back_and_forth
 bindsym Control+Mod4+n super_workspace notifications toggle
 bindsym Control+Mod4+Shift+1 move container to super_workspace number $ss1
+bindsym Control+Mod4+p super_workspace pin toggle
+for_window [class="Spotify"] super_workspace pin enable
 -----------------------------------------------------------------
 
 === Moving workspaces to a different screen

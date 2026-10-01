@@ -541,6 +541,15 @@ void dump_node(yajl_gen gen, struct Con *con, bool inplace_restart) {
         }
     }
 
+    ystr("super_workspace_pinned");
+    y(bool, con->ss_pinned);
+
+    ystr("window_uid");
+    if (con->window && con->window->uid_known)
+        y(integer, con->window->uid);
+    else
+        y(null);
+
     ystr("window");
     if (con->window)
         y(integer, con->window->id);

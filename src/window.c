@@ -211,6 +211,43 @@ void window_update_strut_partial(i3Window *win, xcb_get_property_reply_t *prop) 
 }
 
 /*
+ * Finds out the Unix user owning the client of |win| (pid via the X-Resource
+ * extension, uid via /proc). Leaves win->uid_known false for remote clients.
+ *
+ */
+void window_update_owner(i3Window *win) {
+    xcb_res_client_id_spec_t spec = {
+        .client = win->id,
+        .mask = XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID,
+    };
+    xcb_res_query_client_ids_reply_t *reply = xcb_res_query_client_ids_reply(
+        conn, xcb_res_query_client_ids(conn, 1, &spec), NULL);
+    if (reply == NULL) {
+        return;
+    }
+
+    xcb_res_client_id_value_iterator_t it = xcb_res_query_client_ids_ids_iterator(reply);
+    for (; it.rem; xcb_res_client_id_value_next(&it)) {
+        if (!(it.data->spec.mask & XCB_RES_CLIENT_ID_MASK_LOCAL_CLIENT_PID) ||
+            xcb_res_client_id_value_value_length(it.data) < 1) {
+            continue;
+        }
+        const uint32_t pid = *xcb_res_client_id_value_value(it.data);
+        char *path;
+        sasprintf(&path, "/proc/%u", pid);
+        struct stat st;
+        if (stat(path, &st) == 0) {
+            win->uid = st.st_uid;
+            win->uid_known = true;
+            DLOG("Window 0x%08x belongs to pid %u, uid %d\n", win->id, pid, (int)st.st_uid);
+        }
+        free(path);
+        break;
+    }
+    free(reply);
+}
+
+/*
  * Updates the WM_WINDOW_ROLE
  *
  */

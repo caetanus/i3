@@ -1045,6 +1045,31 @@ void cmd_super_workspace(I3_CMD, const char *name) {
 }
 
 /*
+ * Implementation of 'super_workspace pin enable|disable|toggle'.
+ *
+ */
+void cmd_super_workspace_pin(I3_CMD, const char *action) {
+    HANDLE_EMPTY_MATCH;
+
+    owindow *current;
+    TAILQ_FOREACH (current, &owindows, owindows) {
+        Con *con = current->con;
+        if (con->type != CT_CON) {
+            continue;
+        }
+        if (strcmp(action, "toggle") == 0) {
+            con->ss_pinned = !con->ss_pinned;
+        } else {
+            con->ss_pinned = (strcmp(action, "enable") == 0);
+        }
+        DLOG("Container %p is %spinned to all super workspaces\n", con, con->ss_pinned ? "" : "no longer ");
+    }
+
+    cmd_output->needs_tree_render = true;
+    ysuccess(true);
+}
+
+/*
  * Implementation of 'move [window|container] [to] super_workspace [number] <name>'.
  *
  */

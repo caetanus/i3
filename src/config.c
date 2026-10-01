@@ -209,6 +209,8 @@ bool load_configuration(const char *override_configpath, config_load_t load_type
 
     /* border and indicator color are ignored for placeholder contents */
     INIT_COLOR(config.client.placeholder, "#000000", "#0c0c0c", "#ffffff", "#000000");
+    INIT_COLOR(config.client.alien, "#7a4a1a", "#4a2f12", "#d0b090", "#7a4a1a");
+    INIT_COLOR(config.client.focused_alien, "#f0a030", "#b06a10", "#ffffff", "#ffc060");
 
     /* the last argument (indicator color) is ignored for bar colors */
     INIT_COLOR(config.bar.focused, "#4c7899", "#285577", "#ffffff", "#000000");

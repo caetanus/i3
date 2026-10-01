@@ -32,6 +32,7 @@
 #include <xcb/xcb_aux.h>
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_keysyms.h>
+#include <xcb/res.h>
 
 #include "libi3.h"
 #include "data.h"

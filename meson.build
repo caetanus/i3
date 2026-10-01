@@ -305,6 +305,7 @@ iconv_dep = cc.find_library('iconv', required: false)
 libsn_dep = dependency('libstartup-notification-1.0', method: 'pkg-config')
 xcb_dep = dependency('xcb', method: 'pkg-config')
 xcb_xkb_dep = dependency('xcb-xkb', method: 'pkg-config')
+xcb_res_dep = dependency('xcb-res', method: 'pkg-config')
 xcb_xinerama_dep = dependency('xcb-xinerama', method: 'pkg-config')
 xcb_randr_dep = dependency('xcb-randr', method: 'pkg-config')
 xcb_shape_dep = dependency('xcb-shape', method: 'pkg-config')
@@ -463,6 +464,7 @@ common_deps = [
   rt_dep,
   libsn_dep,
   xcb_dep,
+  xcb_res_dep,
   xcb_xkb_dep,
   xcb_xinerama_dep,
   xcb_randr_dep,

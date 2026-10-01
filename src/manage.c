@@ -212,6 +212,7 @@ void manage_window(xcb_window_t window, xcb_get_window_attributes_cookie_t cooki
     window_update_transient_for(cwindow, xcb_get_property_reply(conn, transient_cookie, NULL));
     window_update_strut_partial(cwindow, xcb_get_property_reply(conn, strut_cookie, NULL));
     window_update_role(cwindow, xcb_get_property_reply(conn, role_cookie, NULL));
+    window_update_owner(cwindow);
     bool urgency_hint;
     window_update_hints(cwindow, xcb_get_property_reply(conn, wm_hints_cookie, NULL), &urgency_hint);
     border_style_t motif_border_style;

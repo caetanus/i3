@@ -466,11 +466,14 @@ state MODE:
 # super_workspace [number] <name>
 # super_workspace back_and_forth
 # super_workspace notifications current|all|toggle
+# super_workspace pin enable|disable|toggle
 state SUPER_WORKSPACE:
   'back_and_forth'
       -> call cmd_super_workspace_back_and_forth()
   'notifications'
       -> SUPER_WORKSPACE_NOTIFICATIONS
+  'pin'
+      -> SUPER_WORKSPACE_PIN
   'number'
       -> SUPER_WORKSPACE_NUMBER
   name = string
@@ -479,6 +482,10 @@ state SUPER_WORKSPACE:
 state SUPER_WORKSPACE_NUMBER:
   name = string
       -> call cmd_super_workspace($name)
+
+state SUPER_WORKSPACE_PIN:
+  action = 'enable', 'disable', 'toggle'
+      -> call cmd_super_workspace_pin($action)
 
 state SUPER_WORKSPACE_NOTIFICATIONS:
   scope = 'current', 'all', 'toggle'

@@ -504,6 +504,11 @@ void x_draw_decoration(Con *con) {
     } else {
         p->color = &config.client.unfocused;
     }
+    /* Windows of another user than the one of their super workspace. */
+    if (!con->urgent && con_is_alien(con)) {
+        p->color = (p->color == &config.client.focused) ? &config.client.focused_alien
+                                                         : &config.client.alien;
+    }
 
     p->border_style = con_border_style(con);
 

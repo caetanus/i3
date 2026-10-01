@@ -78,6 +78,94 @@ const char *super_workspace_user(int num) {
     return (assignment != NULL ? assignment->user : NULL);
 }
 
+bool con_is_alien(Con *con) {
+    if (con->window == NULL || !con->window->uid_known)
+        return false;
+    Con *ws = con_get_workspace(con);
+    if (ws == NULL || con_is_internal(ws))
+        return false;
+
+    /* Super workspaces without a (known) user belong to the i3 user. */
+    struct Super_Workspace_Assignment *assignment = get_assignment(ws->super_workspace);
+    const uid_t expected = (assignment != NULL && assignment->has_uid) ? assignment->uid : getuid();
+    return con->window->uid != expected;
+}
+
+/* A pinned container and where it was, to be moved into the super workspace
+ * which is switched to. */
+struct pinned {
+    Con *con;
+    char *workspace;
+    int num;
+    char *output;
+};
+
+static int collect_pinned(struct pinned **pinned) {
+    int count = 0;
+    *pinned = NULL;
+    Con *con;
+    TAILQ_FOREACH (con, &all_cons, all_cons) {
+        if (!con->ss_pinned || con->type != CT_CON)
+            continue;
+        Con *ws = con_get_workspace(con);
+        if (ws == NULL || con_is_internal(ws))
+            continue;
+        *pinned = srealloc(*pinned, (count + 1) * sizeof(struct pinned));
+        (*pinned)[count++] = (struct pinned){
+            .con = con,
+            .workspace = sstrdup(ws->name),
+            .num = ws->num,
+            .output = sstrdup(con_get_output(ws)->name),
+        };
+    }
+    return count;
+}
+
+/* Returns the workspace of the active super workspace with the number (or,
+ * for named workspaces, the name) of |pin|'s workspace, creating it on the
+ * output the pinned container was on. */
+static Con *pinned_target(struct pinned *pin) {
+    Con *ws = (pin->num != -1) ? get_existing_workspace_by_num(pin->num)
+                               : get_existing_workspace_by_name(pin->workspace);
+    if (ws != NULL)
+        return ws;
+
+    Output *output = get_output_by_name(pin->output, true);
+    if (output == NULL)
+        output = get_first_output();
+    ws = con_new(NULL, NULL);
+    ws->type = CT_WORKSPACE;
+    ws->name = sstrdup(pin->workspace);
+    ws->num = pin->num;
+    ws->super_workspace = current_super_workspace;
+    ws->workspace_layout = config.default_layout;
+    if (config.default_orientation == NO_ORIENTATION) {
+        ws->layout = (output->con->rect.height > output->con->rect.width) ? L_SPLITV : L_SPLITH;
+    } else {
+        ws->layout = (config.default_orientation == HORIZ) ? L_SPLITH : L_SPLITV;
+    }
+    con_attach(ws, output_get_content(output->con), false);
+
+    char *name;
+    sasprintf(&name, "[i3 con] workspace %s", ws->name);
+    x_set_name(ws, name);
+    free(name);
+
+    ipc_send_workspace_event("init", ws, NULL);
+    return ws;
+}
+
+static void move_pinned(struct pinned *pinned, int count) {
+    for (int i = 0; i < count; i++) {
+        Con *target = pinned_target(&pinned[i]);
+        DLOG("Pinned container %p follows to workspace %s\n", pinned[i].con, target->name);
+        con_move_to_workspace(pinned[i].con, target, true, true, true);
+        free(pinned[i].workspace);
+        free(pinned[i].output);
+    }
+    free(pinned);
+}
+
 /* Returns the content container of the __i3 pseudo-output, where the
  * workspaces of inactive super workspaces are stashed. */
 static Con *stash_content(void) {
@@ -199,12 +287,15 @@ void super_workspace_switch(int num) {
     char *focused_output = sstrdup(con_get_output(focused)->name);
 
     LOG("Switching from super workspace %d to %d\n", current_super_workspace, num);
+    struct pinned *pinned;
+    const int pinned_count = collect_pinned(&pinned);
     stash_workspaces(stash);
 
     const int old = current_super_workspace;
     current_super_workspace = num;
     restore_workspaces(stash, num);
     fix_outputs();
+    move_pinned(pinned, pinned_count);
 
     /* Focus the workspace that was focused when leaving the target, or the
      * visible one on the output which had focus. */

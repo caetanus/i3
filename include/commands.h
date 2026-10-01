@@ -153,6 +153,12 @@ void cmd_super_workspace_back_and_forth(I3_CMD);
 void cmd_super_workspace_notifications(I3_CMD, const char *scope);
 
 /**
+ * Implementation of 'super_workspace pin enable|disable|toggle'.
+ *
+ */
+void cmd_super_workspace_pin(I3_CMD, const char *action);
+
+/**
  * Implementation of 'move [window|container] [to] super_workspace [number] <name>'.
  *
  */

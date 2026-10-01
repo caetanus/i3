@@ -79,6 +79,13 @@ char *super_workspace_name(int num);
 const char *super_workspace_user(int num);
 
 /**
+ * Returns true if |con| is a window whose user is not the user of its super
+ * workspace (or not the i3 user, for super workspaces without a user).
+ *
+ */
+bool con_is_alien(Con *con);
+
+/**
  * Dumps the super workspace state (active one, all known ones and the
  * notification scope) as the body of a JSON map.
  *
